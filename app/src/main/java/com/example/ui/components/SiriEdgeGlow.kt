@@ -51,12 +51,11 @@ fun SiriEdgeGlow(
     )
 
     val siriColors = listOf(
-        Color(0xFF6C2AFA), // Neon Purple
-        Color(0xFF00AAFF), // Ocean Blue
-        Color(0xFF00FFCC), // Radiant Cyan
-        Color(0xFFFF1177), // Pink Magenta
-        Color(0xFFFFFF00), // Sunshine Yellow
-        Color(0xFF6C2AFA)  // Neon Purple
+        Color(0xFFD0BCFF), // M3 Primary Lavender
+        Color(0xFF8126FF), // Neon Purple
+        Color(0xFFFF3CAC), // Sophisticated Pink-Magenta
+        Color(0xFF00AAFF), // Cyber Blue
+        Color(0xFFD0BCFF)  // M3 Primary Lavender
     )
 
     Box(
@@ -104,10 +103,10 @@ fun SiriEdgeGlow(
                     width = 3.dp,
                     brush = Brush.sweepGradient(
                         colors = listOf(
-                            Color(0xFF2B86C5),
+                            Color(0xFF8126FF),
                             Color(0xFFFF3CAC),
-                            Color(0xFF784BA0),
-                            Color(0xFF2B86C5)
+                            Color(0xFFD0BCFF),
+                            Color(0xFF8126FF)
                         )
                     ),
                     shape = RoundedCornerShape(14.dp)

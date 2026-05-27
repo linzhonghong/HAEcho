@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,24 +59,48 @@ fun MainDashboard(
     ) {
         Scaffold(
             bottomBar = {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = Color(0xFF1C1B1F),
+                    tonalElevation = 0.dp
+                ) {
                     NavigationBarItem(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
                         icon = { Icon(Icons.Default.Dashboard, contentDescription = "控制面板") },
-                        label = { Text("控制面板") }
+                        label = { Text("控制面板") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF1C1B1F),
+                            selectedTextColor = Color(0xFFD0BCFF),
+                            unselectedIconColor = Color(0xFFCAC4D0),
+                            unselectedTextColor = Color(0xFFCAC4D0),
+                            indicatorColor = Color(0xFFD0BCFF)
+                        )
                     )
                     NavigationBarItem(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
                         icon = { Icon(Icons.Default.Settings, contentDescription = "助手设置") },
-                        label = { Text("助手设置") }
+                        label = { Text("助手设置") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF1C1B1F),
+                            selectedTextColor = Color(0xFFD0BCFF),
+                            unselectedIconColor = Color(0xFFCAC4D0),
+                            unselectedTextColor = Color(0xFFCAC4D0),
+                            indicatorColor = Color(0xFFD0BCFF)
+                        )
                     )
                     NavigationBarItem(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
                         icon = { Icon(Icons.Default.Assignment, contentDescription = "运行日志") },
-                        label = { Text("运行日志") }
+                        label = { Text("运行日志") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF1C1B1F),
+                            selectedTextColor = Color(0xFFD0BCFF),
+                            unselectedIconColor = Color(0xFFCAC4D0),
+                            unselectedTextColor = Color(0xFFCAC4D0),
+                            indicatorColor = Color(0xFFD0BCFF)
+                        )
                     )
                 }
             }
@@ -84,13 +109,16 @@ fun MainDashboard(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(Color(0xFF1C1B1F))
             ) {
                 if (!recordAudioPermissionState.status.isGranted) {
                     PermissionBlockedScreen(permissionState = recordAudioPermissionState)
                 } else {
                     when (selectedTab) {
-                        0 -> ControlPanelScreen(viewModel = viewModel)
+                        0 -> ControlPanelScreen(
+                            viewModel = viewModel,
+                            onSettingsClick = { selectedTab = 1 }
+                        )
                         1 -> SettingsScreen(viewModel = viewModel)
                         2 -> LogsScreen(viewModel = viewModel)
                     }
@@ -141,7 +169,7 @@ fun PermissionBlockedScreen(permissionState: PermissionState) {
 }
 
 @Composable
-fun ControlPanelScreen(viewModel: AssistantViewModel) {
+fun ControlPanelScreen(viewModel: AssistantViewModel, onSettingsClick: () -> Unit = {}) {
     val isRunning by viewModel.isServiceRunning.collectAsStateWithLifecycle()
     val connStatus by viewModel.connectionStatus.collectAsStateWithLifecycle()
     val connOk by viewModel.isConnectionOk.collectAsStateWithLifecycle()
@@ -152,6 +180,10 @@ fun ControlPanelScreen(viewModel: AssistantViewModel) {
     val listeningHint by viewModel.listeningHint.collectAsStateWithLifecycle()
     val lastUserMsg by viewModel.lastUserMessage.collectAsStateWithLifecycle()
     val lastReplyMsg by viewModel.lastReplyMessage.collectAsStateWithLifecycle()
+    val logs by viewModel.logList.collectAsStateWithLifecycle()
+    val wakeWord by viewModel.wakeWord.collectAsStateWithLifecycle()
+    val voiceReplyEnabled by viewModel.voiceReplyEnabled.collectAsStateWithLifecycle()
+    val timeoutSeconds by viewModel.timeoutSeconds.collectAsStateWithLifecycle()
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_animation")
     val pulseScale by infiniteTransition.animateFloat(
@@ -171,151 +203,299 @@ fun ControlPanelScreen(viewModel: AssistantViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // App Header Title
+        // Sophisticated Dark Top App Bar matching HTML
         item {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "卫星语音助手",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 2.sp
-                )
-                Text(
-                    text = "Home Assistant Assist Client",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.outline
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Assist Satellite",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        letterSpacing = (-0.5).sp
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (connOk && isRunning) Color(0xFF4ADE80) else Color(0xFF9E9E9E))
+                        )
+                        Text(
+                            text = if (connOk && isRunning) "CONNECTED TO HOME ASSISTANT" else "CONNECTED STATE: $connStatus",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFCAC4D0),
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF49454F))
+                ) {
+                    Text(text = "🛰️", fontSize = 18.sp)
+                }
             }
         }
 
-        // Connection Summary Card
+        // Connection Summary Card in Grid format
         item {
-            Card(
+            val connMode by viewModel.connectionMode.collectAsStateWithLifecycle()
+            val playMode by viewModel.playbackMode.collectAsStateWithLifecycle()
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(Color(0xFF2B2930), RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFF49454F), RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "CONNECTION MODE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFD0BCFF),
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = connMode.ifBlank { "Assist Satellite" },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(Color(0xFF2B2930), RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFF49454F), RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "PLAYBACK MODE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFD0BCFF),
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (playMode == "App") "App Speaker" else if (playMode == "Media player") "Media Player" else "Automation",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        // Configuration Settings dashboard box (Rich design layout)
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF2B2930), RoundedCornerShape(24.dp))
+                    .border(1.dp, Color(0xFF49454F).copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                    .padding(20.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isRunning) Color(0xFF4CAF50) else Color(0xFF9E9E9E))
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                        Column {
                             Text(
-                                text = if (isRunning) "服务正在后台运行" else "助手服务已停止",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
+                               text = "Wake Word",
+                               fontSize = 12.sp,
+                               color = Color(0xFFCAC4D0)
+                            )
+                            Text(
+                               text = if (wakeWord.isNotBlank()) "\"$wakeWord\"" else "\"Hey Assist\"",
+                               fontSize = 18.sp,
+                               fontWeight = FontWeight.Medium,
+                               color = Color.White
                             )
                         }
 
-                        if (isRunning) {
-                            Box(
-                                modifier = Modifier
-                                    .graphicsLayer(scaleX = pulseScale, scaleY = pulseScale)
-                                    .size(12.dp)
-                                    .clip(CircleShape)
-                                    .background(if (connOk) Color(0xFF00C853) else Color(0xFFFF3D00))
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                               text = "Voice Response",
+                               fontSize = 12.sp,
+                               color = Color(0xFFCAC4D0)
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                               modifier = Modifier
+                                   .size(width = 44.dp, height = 22.dp)
+                                   .clip(CircleShape)
+                                   .background(if (voiceReplyEnabled) Color(0xFFD0BCFF) else Color(0xFF49454F))
+                                   .padding(2.dp),
+                               contentAlignment = if (voiceReplyEnabled) Alignment.CenterEnd else Alignment.CenterStart
+                            ) {
+                               Box(
+                                   modifier = Modifier
+                                       .size(18.dp)
+                                       .clip(CircleShape)
+                                       .background(if (voiceReplyEnabled) Color(0xFF381E72) else Color(0xFFCAC4D0))
+                               )
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Divider()
-                    Spacer(modifier = Modifier.height(12.dp))
-
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = if (connOk) Icons.Default.CloudQueue else Icons.Default.CloudOff,
-                            contentDescription = "Home Assistant 连接状况",
-                            tint = if (connOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Home Assistant 连接状态",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = connStatus,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (connOk) Color(0xFF00AA66) else MaterialTheme.colorScheme.onErrorContainer
-                            )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF1C1B1F), RoundedCornerShape(12.dp))
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "MAX TURNS",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFCAC4D0)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = String.format("%02d", maxTurns),
+                                    fontSize = 18.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF1C1B1F), RoundedCornerShape(12.dp))
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "TIMEOUT",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFCAC4D0)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "${timeoutSeconds}s",
+                                    fontSize = 18.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF1C1B1F), RoundedCornerShape(12.dp))
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "SENSITIVITY",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFCAC4D0)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "HIGH",
+                                    fontSize = 18.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Conversation Visualizer / Logs Cards
+        // Live Dialog & Mini Terminal Logs Combination Box
         item {
-            Card(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 180.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (assistantState == AssistantState.WAKEN_ACTIVE) {
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    }
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    .background(Color(0xFF2B2930), RoundedCornerShape(24.dp))
+                    .border(1.dp, Color(0xFF49454F).copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                    .padding(16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "当前交互阶段",
-                            fontSize = 13.sp,
+                            text = "LIVE INTERACTION",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.outline
+                            color = Color(0xFFD0BCFF),
+                            letterSpacing = 0.5.sp
                         )
                         Badge(
                             containerColor = when (assistantState) {
-                                AssistantState.IDLE -> MaterialTheme.colorScheme.secondary
-                                AssistantState.LISTENING_WAKE -> MaterialTheme.colorScheme.primary
-                                AssistantState.WAKEN_ACTIVE -> Color(0xFFFF1177)
-                                AssistantState.PROCESSING -> MaterialTheme.colorScheme.tertiary
+                                AssistantState.IDLE -> Color(0xFF49454F)
+                                AssistantState.LISTENING_WAKE -> Color(0xFF381E72)
+                                AssistantState.WAKEN_ACTIVE -> Color(0xFFB3261E)
+                                AssistantState.PROCESSING -> Color(0xFF8126FF)
                             }
                         ) {
                             Text(
                                 text = when (assistantState) {
                                     AssistantState.IDLE -> "IDLE"
                                     AssistantState.LISTENING_WAKE -> "等待唤醒"
-                                    AssistantState.WAKEN_ACTIVE -> "唤醒激活中"
-                                    AssistantState.PROCESSING -> "处理回答中"
+                                    AssistantState.WAKEN_ACTIVE -> "唤醒激活"
+                                    AssistantState.PROCESSING -> "处理回答"
                                 },
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 color = Color.White,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
                             )
                         }
                     }
 
                     if (assistantState == AssistantState.WAKEN_ACTIVE || assistantState == AssistantState.PROCESSING) {
-                        // Interactive Speech bubbles!
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (lastUserMsg.isNotBlank()) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -323,13 +503,13 @@ fun ControlPanelScreen(viewModel: AssistantViewModel) {
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp, 2.dp, 12.dp, 12.dp))
-                                            .background(MaterialTheme.colorScheme.primary)
-                                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                                            .clip(RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
+                                            .background(Color(0xFF381E72))
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
                                     ) {
                                         Text(
                                             text = lastUserMsg,
-                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            color = Color.White,
                                             fontSize = 14.sp
                                         )
                                     }
@@ -343,52 +523,91 @@ fun ControlPanelScreen(viewModel: AssistantViewModel) {
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(2.dp, 12.dp, 12.dp, 12.dp))
-                                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                                            .clip(RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
+                                            .background(Color(0xFF1C1B1F))
+                                            .border(1.dp, Color(0xFF49454F), RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
                                     ) {
                                         Text(
                                             text = lastReplyMsg,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            color = Color(0xFFE6E1E5),
                                             fontSize = 14.sp
                                         )
                                     }
                                 }
                             }
-                            
-                            // Dialogue turns counter
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "多轮对话剩余轮次: ${maxTurns - turnsCount} / $maxTurns",
+                                    text = " dialogue step remaining: ${maxTurns - turnsCount} / $maxTurns ",
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.outline
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFD0BCFF)
                                 )
                             }
                         }
                     } else {
-                        // Empty states / Tips
-                        Column(
+                        // Sophisticated mini log terminal
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .heightIn(min = 100.dp)
+                                .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                .padding(12.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Hearing,
-                                contentDescription = "空闲",
-                                tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = if (isRunning) "说出您的唤醒词，或点击下方的“手动唤醒”按钮直接发起语音交互！" else "助手服务未启动，请点击下方粉色大按钮开启语音卫星服务。",
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            val activeLogs = logs.takeLast(4).reversed()
+                            if (activeLogs.isEmpty()) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "⚡ System Idle - Standing By",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFD0BCFF).copy(alpha = 0.6f)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Say \"$wakeWord\" to activate voice control",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFCAC4D0),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    activeLogs.forEach { log ->
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Text(
+                                                text = "[${log.level}]",
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = 10.sp,
+                                                color = when (log.level) {
+                                                    "ERROR" -> Color(0xFFF2B8B5)
+                                                    "WARN" -> Color(0xFFFFD54F)
+                                                    "SUCCESS" -> Color(0xFF81C784)
+                                                    else -> Color(0xFFD0BCFF)
+                                                },
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = log.message,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = 10.sp,
+                                                color = Color(0xFFD0BCFF).copy(alpha = 0.85f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -419,84 +638,106 @@ fun ControlPanelScreen(viewModel: AssistantViewModel) {
                         label = "w3"
                     )
 
-                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale1).background(MaterialTheme.colorScheme.primary, CircleShape))
-                    Box(modifier = Modifier.height(36.dp).width(3.dp).graphicsLayer(scaleY = scale2).background(Color(0xFFFF1177), CircleShape))
-                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale3).background(MaterialTheme.colorScheme.primary, CircleShape))
+                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale1).background(Color(0xFFD0BCFF), CircleShape))
+                    Box(modifier = Modifier.height(36.dp).width(3.dp).graphicsLayer(scaleY = scale2).background(Color(0xFFB3261E), CircleShape))
+                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale3).background(Color(0xFFD0BCFF), CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = listeningHint, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(text = listeningHint, fontSize = 12.sp, color = Color(0xFFD0BCFF), fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale3).background(MaterialTheme.colorScheme.primary, CircleShape))
-                    Box(modifier = Modifier.height(36.dp).width(3.dp).graphicsLayer(scaleY = scale1).background(Color(0xFFFF1177), CircleShape))
-                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale2).background(MaterialTheme.colorScheme.primary, CircleShape))
+                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale3).background(Color(0xFFD0BCFF), CircleShape))
+                    Box(modifier = Modifier.height(36.dp).width(3.dp).graphicsLayer(scaleY = scale1).background(Color(0xFFB3261E), CircleShape))
+                    Box(modifier = Modifier.height(24.dp).width(3.dp).graphicsLayer(scaleY = scale2).background(Color(0xFFD0BCFF), CircleShape))
                 }
             }
         }
 
-        // Central trigger button
+        // Bottom control action buttons
         item {
-            Spacer(modifier = Modifier.height(16.dp))
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Main circular mic button
+                // Glorious Mic Button (M3 Lavender Gold aura)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(120.dp)
+                        .size(100.dp)
                         .clip(CircleShape)
                         .background(
-                            Brush.radialGradient(
+                            Brush.linearGradient(
                                 colors = if (isRunning) {
-                                    listOf(Color(0xFF8126FF), Color(0xFF00C853))
+                                    listOf(Color(0xFFD0BCFF), Color(0xFF8126FF))
                                 } else {
-                                    listOf(Color(0xFFFF3CAC), Color(0xFF784BA0))
+                                    listOf(Color(0xFF49454F), Color(0xFF38353F))
                                 }
                             )
                         )
                         .clickable { viewModel.toggleAssistant() }
                         .testTag("assistant_toggle_button")
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1C1B1F))
+                    ) {
                         Icon(
                             imageVector = if (isRunning) Icons.Default.Mic else Icons.Default.PlayArrow,
-                            contentDescription = "启动/停止",
-                            tint = Color.White,
+                            contentDescription = "Power Mode Toggle",
+                            tint = Color(0xFFD0BCFF),
                             modifier = Modifier.size(36.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isRunning) "停止服务" else "开始监听",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.ExtraBold
                         )
                     }
                 }
 
-                // Sub trigger buttons
-                if (isRunning) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.triggerManualWake() },
-                            modifier = Modifier.testTag("manual_wake_button")
-                        ) {
-                            Icon(Icons.Default.FlashOn, contentDescription = "手动唤醒")
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("手动唤醒")
-                        }
+                Spacer(modifier = Modifier.height(4.dp))
 
-                        Button(
-                            onClick = { viewModel.stopAssistant() },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                            modifier = Modifier.testTag("force_stop_button")
-                        ) {
-                            Icon(Icons.Default.Stop, contentDescription = "紧急停止")
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("关闭")
-                        }
+                // Action buttons representing Stop and Config Gear
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = { viewModel.stopAssistant() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFB3261E),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                            .testTag("force_stop_button")
+                    ) {
+                        Text(
+                            text = "STOP ENGINE",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF49454F))
+                            .clickable { onSettingsClick() }
+                            .testTag("on_screen_gear_nav")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings Panel Link",
+                            tint = Color(0xFFE6E1E5)
+                        )
                     }
                 }
             }
