@@ -13,6 +13,7 @@ import android.util.Log
 import com.example.data.AppRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -47,19 +48,23 @@ class SpeechController(
     }
 
     private fun initializeSpeechRecognizer() {
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                if (SpeechRecognizer.isRecognitionAvailable(context)) {
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                        setRecognitionListener(this@SpeechController)
-                    }
-                    logInfo("语音识别引擎初始化成功")
-                } else {
-                    logError("当前设备不支持系统语音识别")
-                }
-            } catch (e: Exception) {
-                logError("初始化语音识别失败: ${e.message}")
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            CoroutineScope(Dispatchers.Main).launch {
+                initializeSpeechRecognizer()
             }
+            return
+        }
+        try {
+            if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                    setRecognitionListener(this@SpeechController)
+                }
+                logInfo("语音识别引擎初始化成功")
+            } else {
+                logError("当前设备不支持系统语音识别")
+            }
+        } catch (e: Exception) {
+            logError("初始化语音识别失败: ${e.message}")
         }
     }
 
@@ -76,45 +81,52 @@ class SpeechController(
 
     fun startListening(wakeMode: Boolean) {
         this.isWakeMode = wakeMode
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                if (speechRecognizer == null) {
-                    initializeSpeechRecognizer()
-                }
-                
-                // Stop previous active audio to avoid overlapping
-                stopAudioPlayback()
-
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.CHINESE.toString())
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                }
-
-                speechRecognizer?.startListening(intent)
-                isListening = true
-                val stateText = if (wakeMode) "正在监测唤醒词: \"$wakeWord\"" else "正在倾听指令..."
-                onListeningStateChanged(true, stateText)
-                logInfo("启动语音录制 ($stateText)")
-            } catch (e: Exception) {
-                logError("启动语音监听失败: ${e.message}")
-                onListeningStateChanged(false, "监听出错")
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            CoroutineScope(Dispatchers.Main).launch {
+                startListening(wakeMode)
             }
+            return
+        }
+        try {
+            if (speechRecognizer == null) {
+                initializeSpeechRecognizer()
+            }
+            
+            isListening = true
+            stopAudioPlaybackSync()
+
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.CHINESE.toString())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+
+            speechRecognizer?.startListening(intent)
+            val stateText = if (wakeMode) "正在监测唤醒词: \"$wakeWord\"" else "正在倾听指令..."
+            onListeningStateChanged(true, stateText)
+            logInfo("启动语音录制 ($stateText)")
+        } catch (e: Exception) {
+            logError("启动语音监听失败: ${e.message}")
+            onListeningStateChanged(false, "监听出错")
         }
     }
 
     fun stopListening() {
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                speechRecognizer?.stopListening()
-                speechRecognizer?.cancel()
-                isListening = false
-                onListeningStateChanged(false, "已停止监听")
-                logInfo("语音录制已完全停止")
-            } catch (e: Exception) {
-                logError("停止录音异常: ${e.message}")
+        isListening = false
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            CoroutineScope(Dispatchers.Main).launch {
+                stopListening()
             }
+            return
+        }
+        try {
+            speechRecognizer?.stopListening()
+            speechRecognizer?.cancel()
+            onListeningStateChanged(false, "已停止监听")
+            logInfo("语音录制已完全停止")
+        } catch (e: Exception) {
+            logError("停止录音异常: ${e.message}")
         }
     }
 
@@ -126,30 +138,49 @@ class SpeechController(
 
     fun playAudioUrl(url: String) {
         if (!voiceReplyEnabled) return
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                logInfo("下载并播放 HA 语音文件: $url")
-                stopAudioPlayback()
-                mediaPlayer = MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                            .build()
-                    )
-                    setDataSource(url)
-                    prepareAsync()
-                    setOnPreparedListener { start() }
-                    setOnCompletionListener {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            CoroutineScope(Dispatchers.Main).launch {
+                playAudioUrl(url)
+            }
+            return
+        }
+        try {
+            logInfo("配置并播放 HA 语音文件: $url")
+            stopAudioPlaybackSync()
+            
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                        .build()
+                )
+                setOnPreparedListener { 
+                    try {
+                        start() 
+                    } catch (e: Exception) {
+                        logError("无法启动音频播放: ${e.message}")
+                    }
+                }
+                setOnCompletionListener {
+                    try {
                         release()
+                    } catch (e: Exception) {}
+                    if (mediaPlayer == this) {
                         mediaPlayer = null
                     }
                 }
-            } catch (e: Exception) {
-                logError("播放音频文件失败: ${e.message}，将降级到本地合成")
-                // fallback to local TTS on failure
-                speakText(url.substringAfterLast("/"))
+                setOnErrorListener { _, what, extra ->
+                    logError("MediaPlayer 错误: what=$what, extra=$extra. 尝试本地降级。")
+                    speakText(url.substringAfterLast("/"))
+                    true
+                }
+                setDataSource(url)
+                prepareAsync()
             }
+        } catch (e: Exception) {
+            logError("播放音频文件失败: ${e.message}，将降级到本地合成")
+            speakText(url.substringAfterLast("/"))
         }
     }
 
@@ -158,11 +189,17 @@ class SpeechController(
         speakText(reply)
     }
 
-    private fun stopAudioPlayback() {
+    private fun stopAudioPlaybackSync() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            CoroutineScope(Dispatchers.Main).launch {
+                stopAudioPlaybackSync()
+            }
+            return
+        }
         try {
             mediaPlayer?.let {
                 if (it.isPlaying) {
-                    it.stop()
+                     it.stop()
                 }
                 it.release()
             }
@@ -173,13 +210,30 @@ class SpeechController(
     }
 
     fun destroy() {
-        CoroutineScope(Dispatchers.Main).launch {
-            speechRecognizer?.destroy()
-            speechRecognizer = null
+        isListening = false
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            CoroutineScope(Dispatchers.Main).launch {
+                destroy()
+            }
+            return
         }
-        tts?.shutdown()
+        try {
+            speechRecognizer?.stopListening()
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        } catch (e: Exception) {
+            // ignore
+        }
+        speechRecognizer = null
+        
+        try {
+            tts?.shutdown()
+        } catch (e: Exception) {
+            // ignore
+        }
         tts = null
-        stopAudioPlayback()
+        
+        stopAudioPlaybackSync()
     }
 
     // RecognitionListener Implementations
@@ -216,9 +270,20 @@ class SpeechController(
         logInfo("录音事件/错误: $message")
         onListeningStateChanged(false, "监听空闲/超时")
 
+        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+            try {
+                speechRecognizer?.cancel()
+            } catch (e: Exception) {}
+        }
+
         // In Wake Mode, we should auto-restart listening on timeout/no match to behave like a standard continuous satellite!
         if (isListening && isWakeMode) {
-            startListening(wakeMode = true)
+            CoroutineScope(Dispatchers.Main).launch {
+                delay(1000)
+                if (isListening && isWakeMode) {
+                    startListening(wakeMode = true)
+                }
+            }
         }
     }
 
