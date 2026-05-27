@@ -180,17 +180,21 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
             context = getApplication(),
             repository = repository,
             onConnectionStatusChanged = { ok, msg ->
-                _isConnectionOk.value = ok
-                _connectionStatus.value = msg
+                viewModelScope.launch {
+                    _isConnectionOk.value = ok
+                    _connectionStatus.value = msg
+                }
             },
             onAssistResponse = { reply, audioUrl ->
-                if (reply.isNotBlank() || audioUrl != null) {
-                    _assistantState.value = AssistantState.WAKEN_ACTIVE
-                    if (reply.isNotBlank()) {
-                        _lastReplyMessage.value = reply
+                viewModelScope.launch {
+                    if (reply.isNotBlank() || audioUrl != null) {
+                        _assistantState.value = AssistantState.WAKEN_ACTIVE
+                        if (reply.isNotBlank()) {
+                            _lastReplyMessage.value = reply
+                        }
+                        handlePlayback(reply, audioUrl)
+                        resetTimeoutTimer()
                     }
-                    handlePlayback(reply, audioUrl)
-                    resetTimeoutTimer()
                 }
             }
         )
@@ -203,14 +207,20 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
             context = getApplication(),
             repository = repository,
             onWakeWordDetected = {
-                handleScreenWakeUp()
+                viewModelScope.launch {
+                    handleScreenWakeUp()
+                }
             },
             onCommandRecognized = { text ->
-                handleCommandText(text)
+                viewModelScope.launch {
+                    handleCommandText(text)
+                }
             },
             onListeningStateChanged = { listening, hint ->
-                _isListeningNow.value = listening
-                _listeningHint.value = hint
+                viewModelScope.launch {
+                    _isListeningNow.value = listening
+                    _listeningHint.value = hint
+                }
             }
         ).apply {
             setConfig(
@@ -348,6 +358,21 @@ class AssistantViewModel(application: Application) : AndroidViewModel(applicatio
         }
         speechController?.stopListening()
         handleScreenWakeUp()
+    }
+
+    fun submitCommandDirectly(text: String) {
+        if (!_isServiceRunning.value) {
+            viewModelScope.launch {
+                repository.addLog("WARN", "System", "请先启动卫星助手服务以发送指令")
+            }
+            return
+        }
+        speechController?.stopListening()
+        // Force state transition to processing
+        viewModelScope.launch {
+            _dialogueTurnCount.value = 0
+            handleCommandText(text)
+        }
     }
 
     fun clearLogs() {

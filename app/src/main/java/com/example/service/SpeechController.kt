@@ -33,6 +33,7 @@ class SpeechController(
     private var wakeResponseList = listOf("在的", "我在", "请吩咐")
     private var voiceReplyEnabled = true
     private var mediaPlayer: MediaPlayer? = null
+    private var consecutiveErrorCount = 0
 
     init {
         initializeSpeechRecognizer()
@@ -69,13 +70,25 @@ class SpeechController(
     }
 
     private fun initializeTextToSpeech() {
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.CHINESE
-                logInfo("TTS 语音引擎初始化成功")
-            } else {
-                logError("TTS 语音引擎初始化失败")
+        try {
+            tts = TextToSpeech(context) { status ->
+                try {
+                    if (status == TextToSpeech.SUCCESS) {
+                        val result = tts?.setLanguage(Locale.CHINESE)
+                        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                            logError("TTS 语言不支持中文，尝试设置默认语言")
+                            tts?.language = Locale.getDefault()
+                        }
+                        logInfo("TTS 语音引擎初始化成功")
+                    } else {
+                        logError("TTS 语音引擎初始化失败")
+                    }
+                } catch (e: Exception) {
+                    logError("TTS 初始化回调异常: ${e.message}")
+                }
             }
+        } catch (e: Exception) {
+            logError("创建 TextToSpeech 实例失败: ${e.message}")
         }
     }
 
@@ -87,6 +100,12 @@ class SpeechController(
             }
             return
         }
+        
+        // Reset the safety latch on a fresh / manual start to allow retry
+        if (consecutiveErrorCount >= 5) {
+            consecutiveErrorCount = 0
+        }
+        
         try {
             if (speechRecognizer == null) {
                 initializeSpeechRecognizer()
@@ -94,6 +113,13 @@ class SpeechController(
             
             isListening = true
             stopAudioPlaybackSync()
+
+            // Proactively cancel any previous active session to prevent ERROR_RECOGNIZER_BUSY crashes
+            try {
+                speechRecognizer?.cancel()
+            } catch (e: Exception) {
+                // ignore
+            }
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -133,7 +159,14 @@ class SpeechController(
     fun speakText(text: String) {
         if (!voiceReplyEnabled) return
         logInfo("本地播放语音: \"$text\"")
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "sat_tts_id")
+        try {
+            val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "sat_tts_id")
+            if (result == TextToSpeech.ERROR) {
+                logError("TTS 播放时发生错误 (QUEUE_FLUSH 返回了 ERROR)")
+            }
+        } catch (e: Exception) {
+            logError("TTS 语音播发异常: ${e.message}")
+        }
     }
 
     fun playAudioUrl(url: String) {
@@ -238,11 +271,21 @@ class SpeechController(
 
     // RecognitionListener Implementations
     override fun onReadyForSpeech(params: Bundle?) {
-        onListeningStateChanged(true, if (isWakeMode) "请说唤醒词: \"$wakeWord\"" else "请说您的指令...")
+        try {
+            consecutiveErrorCount = 0
+            onListeningStateChanged(true, if (isWakeMode) "请说唤醒词: \"$wakeWord\"" else "请说您的指令...")
+        } catch (e: Exception) {
+            logError("onReadyForSpeech 异常: ${e.message}")
+        }
     }
 
     override fun onBeginningOfSpeech() {
-        onListeningStateChanged(true, if (isWakeMode) "唤醒检测中..." else "正在录音指令...")
+        try {
+            consecutiveErrorCount = 0
+            onListeningStateChanged(true, if (isWakeMode) "唤醒检测中..." else "正在录音指令...")
+        } catch (e: Exception) {
+            logError("onBeginningOfSpeech 异常: ${e.message}")
+        }
     }
 
     override fun onRmsChanged(rmsdB: Float) {}
@@ -250,81 +293,119 @@ class SpeechController(
     override fun onBufferReceived(buffer: ByteArray?) {}
 
     override fun onEndOfSpeech() {
-        onListeningStateChanged(false, "正在处理声音...")
+        try {
+            onListeningStateChanged(false, "正在处理声音...")
+        } catch (e: Exception) {
+            logError("onEndOfSpeech 异常: ${e.message}")
+        }
     }
 
     override fun onError(error: Int) {
-        val message = when (error) {
-            SpeechRecognizer.ERROR_AUDIO -> "音频录制错误"
-            SpeechRecognizer.ERROR_CLIENT -> "客户端连接异常"
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
-            SpeechRecognizer.ERROR_NETWORK -> "网络连接异常"
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络超时"
-            SpeechRecognizer.ERROR_NO_MATCH -> "无匹配的话语"
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音系统忙碌/忙ing"
-            SpeechRecognizer.ERROR_SERVER -> "识别服务器错误"
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "倾听超时"
-            else -> "未知录音错误 (code: $error)"
-        }
-        
-        logInfo("录音事件/错误: $message")
-        onListeningStateChanged(false, "监听空闲/超时")
+        try {
+            val message = when (error) {
+                SpeechRecognizer.ERROR_AUDIO -> "音频录制错误"
+                SpeechRecognizer.ERROR_CLIENT -> "客户端连接异常"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
+                SpeechRecognizer.ERROR_NETWORK -> "网络连接异常"
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络超时"
+                SpeechRecognizer.ERROR_NO_MATCH -> "无匹配的话语"
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音系统忙碌/忙ing"
+                SpeechRecognizer.ERROR_SERVER -> "识别服务器错误"
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "倾听超时"
+                else -> "未知录音错误 (code: $error)"
+            }
+            
+            consecutiveErrorCount++
+            logInfo("录音事件/错误: $message (连续错误数: $consecutiveErrorCount)")
+            onListeningStateChanged(false, "监听空闲/超时")
 
-        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-            try {
-                speechRecognizer?.cancel()
-            } catch (e: Exception) {}
-        }
+            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                try {
+                    speechRecognizer?.cancel()
+                } catch (e: Exception) {}
+            }
 
-        // In Wake Mode, we should auto-restart listening on timeout/no match to behave like a standard continuous satellite!
-        if (isListening && isWakeMode) {
-            CoroutineScope(Dispatchers.Main).launch {
-                delay(1000)
-                if (isListening && isWakeMode) {
-                    startListening(wakeMode = true)
+            if (consecutiveErrorCount >= 5) {
+                logError("检测到语音识别连续发生 5 次错误。为防止应用ANR卡死，已暂停自动轮询（系统无内置/受损/未绑定的语音语音识别引擎等常见原因）。请确认设备支持并开启了麦克风及Google语音服务，然后手动重新点击。")
+                // Halts automated recursion to protect device main thread
+                isListening = false
+                return
+            }
+
+            // In Wake Mode, we should auto-restart listening on timeout/no match to behave like a standard continuous satellite!
+            if (isListening && isWakeMode) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    delay(1500)
+                    if (isListening && isWakeMode && consecutiveErrorCount < 5) {
+                        startListening(wakeMode = true)
+                    }
                 }
             }
+        } catch (e: Exception) {
+            logError("onError 异常: ${e.message}")
         }
     }
 
     override fun onResults(results: Bundle?) {
-        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-        val candidate = matches?.firstOrNull() ?: ""
-        if (candidate.isBlank()) {
-            if (isWakeMode) startListening(true)
-            return
-        }
-
-        val cleaned = candidate.trim().lowercase()
-        logInfo("语音识别得出内容: \"$candidate\"")
-
-        if (isWakeMode) {
-            // Wait, does it contain the wake word?
-            if (cleaned.contains(wakeWord) || cleaned.contains("hey assist") || cleaned.contains("assistant")) {
-                logSuccess("检测到唤醒词 \"$wakeWord\" inside \"$candidate\"!")
-                onWakeWordDetected()
-            } else {
-                // Not the wake word, restart listening
-                startListening(true)
+        try {
+            consecutiveErrorCount = 0
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val candidate = matches?.firstOrNull() ?: ""
+            if (candidate.isBlank()) {
+                if (isListening && isWakeMode) {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(800)
+                        if (isListening && isWakeMode) {
+                            startListening(true)
+                        }
+                    }
+                }
+                return
             }
-        } else {
-            // Recognized Command!
-            logSuccess("识别出指令: \"$candidate\"")
-            onCommandRecognized(candidate)
+
+            val cleaned = candidate.trim().lowercase()
+            logInfo("语音识别得出内容: \"$candidate\"")
+
+            if (isWakeMode) {
+                // Wait, does it contain the wake word?
+                if (cleaned.contains(wakeWord) || cleaned.contains("hey assist") || cleaned.contains("assistant")) {
+                    logSuccess("检测到唤醒词 \"$wakeWord\" inside \"$candidate\"!")
+                    onWakeWordDetected()
+                } else {
+                    // Not the wake word, restart listening with safety delay
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(800)
+                        if (isListening && isWakeMode) {
+                            startListening(true)
+                        }
+                    }
+                }
+            } else {
+                // Recognized Command!
+                logSuccess("识别出指令: \"$candidate\"")
+                onCommandRecognized(candidate)
+            }
+        } catch (e: Exception) {
+            logError("onResults 异常: ${e.message}")
         }
     }
 
     override fun onPartialResults(partialResults: Bundle?) {
-        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-        val speech = matches?.firstOrNull() ?: ""
-        if (speech.isNotBlank() && isWakeMode) {
-            val cleaned = speech.trim().lowercase()
-            if (cleaned.contains(wakeWord) || cleaned.contains("hey assist") || cleaned.contains("assistant")) {
-                logSuccess("唤醒词部分匹配成功!")
-                // Cancel active and trigger wake
-                stopListening()
-                onWakeWordDetected()
+        try {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val speech = matches?.firstOrNull() ?: ""
+            if (speech.isNotBlank() && isWakeMode) {
+                consecutiveErrorCount = 0
+                val cleaned = speech.trim().lowercase()
+                if (cleaned.contains(wakeWord) || cleaned.contains("hey assist") || cleaned.contains("assistant")) {
+                    logSuccess("唤醒词部分匹配成功!")
+                    // Cancel active and trigger wake
+                    stopListening()
+                    onWakeWordDetected()
+                }
             }
+        } catch (e: Exception) {
+            logError("onPartialResults 异常: ${e.message}")
         }
     }
 

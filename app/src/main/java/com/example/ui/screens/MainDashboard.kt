@@ -112,7 +112,9 @@ fun MainDashboard(
                     .background(Color(0xFF1C1B1F))
             ) {
                 if (!recordAudioPermissionState.status.isGranted) {
-                    PermissionBlockedScreen(permissionState = recordAudioPermissionState)
+                    PermissionBlockedScreen(
+                        permissionState = recordAudioPermissionState
+                    )
                 } else {
                     when (selectedTab) {
                         0 -> ControlPanelScreen(
@@ -130,7 +132,9 @@ fun MainDashboard(
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun PermissionBlockedScreen(permissionState: PermissionState) {
+fun PermissionBlockedScreen(
+    permissionState: PermissionState
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -160,10 +164,19 @@ fun PermissionBlockedScreen(permissionState: PermissionState) {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(
-            onClick = { permissionState.launchPermissionRequest() },
-            modifier = Modifier.testTag("grant_permission_button")
+            onClick = {
+                try {
+                    permissionState.launchPermissionRequest()
+                } catch (e: Exception) {
+                    // Prevent crash when permission request system throws in non-device headless mode
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("grant_permission_button")
         ) {
-            Text("授予麦克风权限")
+            Text("请求物理麦克风权限")
         }
     }
 }
