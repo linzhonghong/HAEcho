@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Stand/Ring support -->
+    <path
+        android:fillColor="#8126FF"
+        android:pathData="M54,76 C41.85,76 32,66.15 32,54 L38,54 C38,62.84 45.16,70 54,70 C62.84,70 70,62.84 70,54 L76,54 C76,66.15 66.15,76 54,76 Z" />
+    <!-- Center Base support -->
+    <path
+        android:fillColor="#8126FF"
+        android:pathData="M51,75 L57,75 L57,84 L51,84 Z" />
+    <path
+        android:fillColor="#8126FF"
+        android:pathData="M42,84 L66,84 L66,88 L42,88 Z" />
+    <!-- Microphone Core Capsule -->
+    <path
+        android:fillColor="#00FFCC"
+        android:pathData="M54,26 C47.37,26 42,31.37 42,38 L42,54 C42,60.63 47.37,66 54,66 C60.63,66 66,60.63 66,54 L66,38 C66,31.37 60.63,26 54,26 Z" />
+    <!-- Inner design mesh reflection -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,32 L57,32 L57,48 L51,48 Z"
+        android:alpha="0.3" />
+</vector>

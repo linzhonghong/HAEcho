@@ -1,0 +1,6 @@
+{
+  "name": "语音卫星助手",
+  "description": "接入 Home Assistant 的 Assist 助手，支持语音唤醒、多轮对话、App/媒体播放器/自动化播放、iPhone Siri 般的光晕唤醒效果和运行日志。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
